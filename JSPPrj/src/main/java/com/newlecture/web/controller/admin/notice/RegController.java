@@ -1,6 +1,10 @@
 package com.newlecture.web.controller.admin.notice;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.util.Collection;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.MultipartConfig;
@@ -8,12 +12,12 @@ import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.Part;
 
 import com.newlecture.web.entity.Notice;
 import com.newlecture.web.service.NoticeService;
 
-@MultipartConfig(location = "/tmp", fileSizeThreshold = 1024 * 1024, maxFileSize = 1024 * 1024
-		* 5, maxRequestSize = 1024 * 1024 * 5 * 5)
+@MultipartConfig(fileSizeThreshold = 1024 * 1024, maxFileSize = 1024 * 1024 * 50, maxRequestSize = 1024 * 1024 * 50 * 5)
 
 @WebServlet("/admin/board/notice/reg")
 public class RegController extends HttpServlet {
@@ -28,10 +32,45 @@ public class RegController extends HttpServlet {
 	protected void doPost(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
 		String title = request.getParameter("title");
-		System.out.print("title: ");
-		System.out.print(title);
 		String content = request.getParameter("content");
 		String open = request.getParameter("open");
+
+		Collection<Part> parts = request.getParts();
+		StringBuilder builder = new StringBuilder();
+
+		for (Part p : parts) {
+			if (!p.getName().equals("file"))
+				continue;
+			if (p.getSize() == 0)
+				continue;
+			Part filePart = p;
+			String fileName = filePart.getSubmittedFileName();
+			builder.append(fileName);
+			builder.append(",");
+
+			InputStream fis = filePart.getInputStream();
+
+			String realPath = request.getServletContext().getRealPath("/member/upload");
+			System.out.println(realPath);
+
+			File path = new File(realPath);
+			if (!path.exists())
+				path.mkdirs();
+
+			String filePath = realPath + File.separator + fileName;
+			FileOutputStream fos = new FileOutputStream(filePath);
+
+			byte[] buf = new byte[1024];
+			int size = 0;
+			while ((size = fis.read(buf)) != -1)
+				fos.write(buf, 0, size);
+
+			fos.close();
+			fis.close();
+		}
+
+		builder.delete(builder.length() - 1, builder.length());
+
 		boolean pub = false;
 		if (open != null)
 			pub = true;
@@ -41,9 +80,10 @@ public class RegController extends HttpServlet {
 		notice.setContent(content);
 		notice.setPub(pub);
 		notice.setWriterId("101");
+		notice.setFiles(builder.toString());
 
 		NoticeService service = new NoticeService();
-		service.insertNotice(notice);
+		int result = service.insertNotice(notice);
 
 		response.sendRedirect("list");
 	}
